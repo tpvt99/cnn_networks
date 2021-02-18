@@ -3,8 +3,8 @@ from tensorflow.keras import datasets
 import matplotlib.pyplot as plt
 
 # Resnet
-from cnn_network.resnet.models import resnet34, resnet50
-from cnn_network.resnet.train_scripts import ResnetTrainable
+from cnn_network.resnet.resnet_models import resnet34, resnet50
+from cnn_network.train_scripts import ResnetTrainable
 # VGG
 
 #
@@ -35,7 +35,7 @@ def run(config):
         model = resnet34(inputs = tf.keras.Input(shape = input_shape), output_size=output_size)
     else:
         raise ValueError(f"Please provide this cnn_network for {config['exp_name']}")
-    print(model.summary())
+
     #4. Trainer
     optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'])
     trainer = ResnetTrainable(logger = logger, optimizer = optimizer,

@@ -47,11 +47,6 @@ class ResnetTrainable():
             self.test_acc.reset_states()
 
             for index, (data, labels) in enumerate(self.train_dataset):
-                #if epoch == 0 and index == 0:
-                #    tf.summary.trace_on(graph=True)
-                #    self.train_step(data, labels)
-                #    self.logger.tf_board_save_graph()
-                #else:
                 self.train_step(data, labels)
                 print(f'Epoch {epoch}/{self.epochs}: Train {index}/{len(self.train_dataset)} | '
                   f'Loss: {self.train_loss.result():.5f} | '

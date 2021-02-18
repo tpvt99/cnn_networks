@@ -18,13 +18,15 @@ def basic_blocks(inputs: tf.Tensor, filters: int, kernel_size: int, strides: int
     X = tf.keras.layers.BatchNormalization(name=f'{name}_bn2')(X)
 
     if strides > 1:
+        # Projection shortcut
         residuals = tf.keras.layers.Conv2D(filters = filters, kernel_size=1, padding='valid', strides=strides, name=f'{name}_res_conv')(inputs)
         residuals = tf.keras.layers.BatchNormalization(name=f'{name}_res_bn')(residuals)
     else:
+        # Identity shortcut
         residuals = inputs
 
-    X = tf.keras.layers.Add( name=f'{name}_add')([residuals, X])
-    X = tf.keras.layers.ReLU( name=f'{name}_relu2')(X)
+    X = tf.keras.layers.Add(name=f'{name}_add')([residuals, X])
+    X = tf.keras.layers.ReLU(name=f'{name}_relu2')(X)
 
     return X
 
@@ -43,9 +45,11 @@ def bottleneck_blocks(inputs: tf.Tensor, filters: tuple, kernel_size: int, strid
 
     # We add the shape comparison to cover the dim mismatch in first block of conv2_x
     if strides > 1 or inputs.shape[-1] != X.shape[-1]:
+        # Projection shortcut
         residuals = tf.keras.layers.Conv2D(filters = F3, kernel_size=1, strides = strides, padding='same', name = f'{name}_res_conv')(inputs)
         residuals = tf.keras.layers.BatchNormalization(name = f'{name}_res_bn')(residuals)
     else:
+        # Identity shortcut
         residuals = inputs
 
     X = tf.keras.layers.Add(name = f'{name}_add')([residuals, X])
@@ -54,23 +58,40 @@ def bottleneck_blocks(inputs: tf.Tensor, filters: tuple, kernel_size: int, strid
     return X
 
 def resnet34(inputs: tf.keras.Input = tf.keras.Input(shape=(224, 224, 3), name='input'), output_size: int = 1000):
+    '''
+
+       :param inputs:
+       :param output_size:
+       :return:
+       '''
     # Input
     if inputs is None:
-        inputs = tf.keras.Input(shape=(224, 224, 3), name='input')
+        inputs = tf.keras.Input(shape=(224, 224, 3), name='input') #Input shape for ImageNet as in original paper
 
-    # Conv1
-    X = tf.keras.layers.Conv2D(filters = 64, kernel_size = 7, strides = 2, padding='same', name='conv1_conv')(inputs)
-    X = tf.keras.layers.BatchNormalization(name='conv1_bn')(X)
-    X = tf.keras.layers.ReLU(name='conv1_relu')(X)
+    if inputs.shape[1] >= 224: # ImageNet shape as in original paper
+        # Conv1
+        X = tf.keras.layers.Conv2D(filters = 64, kernel_size = 7, strides = 2, padding='same', name='conv1_conv')(inputs)
+        X = tf.keras.layers.BatchNormalization(name='conv1_bn')(X)
+        X = tf.keras.layers.ReLU(name='conv1_relu')(X)
 
-    # Conv2, pool layer
-    X = tf.keras.layers.MaxPool2D(pool_size=3, strides=2, padding='same', name = 'conv2_pool')(X)
+        # Conv2, pool layer
+        X = tf.keras.layers.MaxPool2D(pool_size=3, strides=2, padding='same', name = 'conv2_pool')(X)
+
+    else: # Assume shape is smaller than 224, then we use kernel =3, strides=1
+        # Conv1
+        X = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=1, padding='same', name='conv1_conv')(inputs)
+        X = tf.keras.layers.BatchNormalization(name='conv1_bn')(X)
+        X = tf.keras.layers.ReLU(name='conv1_relu')(X)
+
     # Conv2, block 1-2-3
+    # First block of conv2 have strides=1 so we dont need projection shortcut
     X = basic_blocks(X, filters=64, kernel_size=3, strides=1, name = 'conv2_block1')
     X = basic_blocks(X, filters=64, kernel_size=3, strides=1, name = 'conv2_block2')
     X = basic_blocks(X, filters=64, kernel_size=3, strides=1, name = 'conv2_block3')
 
     # Conv3, block 1-2-3-4
+    # First block of conv3 to conv 5 always have strides=2 to reduce dimension and increase channels.
+    # Hence we need projection shortcut
     X = basic_blocks(X, filters=128, kernel_size=3, strides=2, name = 'conv3_block1')
     X = basic_blocks(X, filters=128, kernel_size=3, strides=1, name = 'conv3_block2')
     X = basic_blocks(X, filters=128, kernel_size=3, strides=1, name = 'conv3_block3')
@@ -108,19 +129,30 @@ def resnet50(inputs: tf.keras.Input = tf.keras.Input(shape=(224, 224, 3), name='
     if inputs is None:
         inputs = tf.keras.Input(shape=(224, 224, 3), name='input')
 
-    # Conv1
-    X = tf.keras.layers.Conv2D(filters=64, kernel_size=7, strides=2, padding='same', name='conv1_conv')(inputs)
-    X = tf.keras.layers.BatchNormalization(name='conv1_bn')(X)
-    X = tf.keras.layers.ReLU(name='conv1_relu')(X)
+    if inputs.shape[1] >= 224: # ImageNet shape as in original paper
+        # Conv1
+        X = tf.keras.layers.Conv2D(filters = 64, kernel_size = 7, strides = 2, padding='same', name='conv1_conv')(inputs)
+        X = tf.keras.layers.BatchNormalization(name='conv1_bn')(X)
+        X = tf.keras.layers.ReLU(name='conv1_relu')(X)
 
-    # Conv2, pool layer
-    X = tf.keras.layers.MaxPool2D(pool_size=3, strides=2, padding='same', name='conv2_pool')(X)
+        # Conv2, pool layer
+        X = tf.keras.layers.MaxPool2D(pool_size=3, strides=2, padding='same', name = 'conv2_pool')(X)
+
+    else: # Assume shape is smaller than 224, then we use kernel =3, strides=1
+        # Conv1
+        X = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=1, padding='same', name='conv1_conv')(inputs)
+        X = tf.keras.layers.BatchNormalization(name='conv1_bn')(X)
+        X = tf.keras.layers.ReLU(name='conv1_relu')(X)
+
     # Conv2, block 1-2-3
+    # First block of conv2 have strides=1, but we need projection shortcut to match dimension of last channels
     X = bottleneck_blocks(X, filters=(64, 64, 256), kernel_size=3, strides=1, name = 'conv2_block1')
     X = bottleneck_blocks(X, filters=(64, 64, 256), kernel_size=3, strides=1, name = 'conv2_block2')
     X = bottleneck_blocks(X, filters=(64, 64, 256), kernel_size=3, strides=1, name = 'conv2_block3')
 
     #Conv3, block 1-2-3-4
+    # First block of conv3 to conv 5 always have strides=2 to reduce dimension and increase channels.
+    # Hence we need projection shortcut
     X = bottleneck_blocks(X, filters=(128, 128, 512), kernel_size=3, strides=2, name='conv3_block1')
     X = bottleneck_blocks(X, filters=(128, 128, 512), kernel_size=3, strides=1, name='conv3_block2')
     X = bottleneck_blocks(X, filters=(128, 128, 512), kernel_size=3, strides=1, name='conv3_block3')
